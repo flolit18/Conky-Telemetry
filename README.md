@@ -13,11 +13,12 @@ Demos/
 
 Designed around:
 - Jersey 15 pixel font
-- CPU load / temperature / package power / clock graph
+- CPU load graph / temperature / package power / current clock
 - NVIDIA GPU utilization / temperature / power / VRAM
 - RAM usage
 - NVMe usage / temperature / I/O
 - Weather, location, time, and uptime
+- Audio spectrum analyser (CAVA + Lua/Cairo)
 - Xinerama multi-monitor placement
 
 ## Screenshot target
@@ -29,8 +30,11 @@ The default layout is intended for a 1920×1080 secondary display and uses rough
 Ubuntu/Debian:
 
 ```bash
-sudo apt install conky-all lm-sensors curl fontconfig
+sudo apt install conky-all lm-sensors curl fontconfig cava
 ```
+
+`conky-all` is required, not `conky-std`: the spectrum analyser is drawn from Lua
+with the Cairo bindings, which only the `-all` build ships.
 
 For NVIDIA telemetry, the NVIDIA driver must provide `nvidia-smi`.
 
@@ -49,17 +53,111 @@ chmod +x install.sh
 ./install.sh
 ```
 
-Then start Conky:
+Then start both Conky windows:
 
 ```bash
-conky -c ~/.config/conky/conky.conf
+~/.config/conky/scripts/start-conky.sh
 ```
 
-To detach it from the terminal:
+The HUD and the spectrum are two separate Conky instances, so `start-conky.sh`
+launches both and detaches them. The autostart entry calls the same script.
+
+## Audio spectrum analyser
+
+The bars under `AUDIO SPECTRUM` are not a Conky widget, they are drawn by
+`spectrum/spectrum.lua` through `lua_draw_hook_post`. The chain is:
+
+```text
+CAVA  ->  /tmp/conky-cava.fifo  ->  spectrum_bridge.py
+      ->  /tmp/conky-spectrum.dat  ->  spectrum.lua  ->  Conky window
+```
+
+The spectrum has its own Conky instance, `conky-spectrum.conf`, running at
+60 fps and anchored to the bottom of the screen, while `conky.conf` holds the
+telemetry at 1 s. They are separate because `update_interval` is global: at
+60 fps the 480 px CPU graph would only hold 8 seconds of history, and Conky
+averages `LOAD`, `READ` and `WRITE` over that same interval.
+
+Conky only draws what it finds in `/tmp/conky-spectrum.dat`, so CAVA and the
+bridge must be running as well. `install.sh` ships a user service for that:
 
 ```bash
-nohup conky -c ~/.config/conky/conky.conf >/dev/null 2>&1 &
+systemctl --user enable --now conky-spectrum.service
 ```
+
+It restarts the pair if either half dies, and `start-spectrum.sh` exits as soon
+as one of them does so the chain is never left half alive. Logs:
+
+```bash
+systemctl --user status conky-spectrum.service
+journalctl --user -u conky-spectrum.service -f
+```
+
+To run it by hand instead, without the service:
+
+```bash
+~/.config/conky/spectrum/start-spectrum.sh
+```
+
+Checks when the bars stay flat:
+
+```bash
+# is the data file being refreshed?
+watch -n0.2 cat /tmp/conky-spectrum.dat
+
+# render test with a static frame: a rising staircase should appear
+for i in $(seq 1 32); do printf '%d ' $((i * 3)); done > /tmp/conky-spectrum.dat
+
+# is Conky loading the Lua script? (run that instance in a terminal)
+conky -c ~/.config/conky/conky-spectrum.conf
+```
+
+CAVA reads the default PulseAudio/PipeWire monitor source, so the bars only move
+while something is actually playing.
+
+### Vertical alignment
+
+The two windows do not know about each other: the HUD is anchored `top_left` and
+the spectrum `bottom_left`, and they meet in the middle. If the spectrum block
+overlaps the NVME section, or leaves a visible gap under it, adjust `gap_y` in
+`conky-spectrum.conf` — that is the only knob.
+
+The Lua hook anchors the bars on `window_height - BOTTOM_OFFSET`, which measures
+whatever is printed under the graph band in `conky-spectrum.conf` — currently
+the `30 HZ / 20 KHZ` line and the rule below it. Adding or removing a line there
+means changing that constant by the same number of pixels.
+
+### Size of the analyser
+
+Two values must move together, otherwise the bars overflow the band or float
+above the baseline:
+
+| What | Where |
+|------|-------|
+| `GRAPH_HEIGHT` | `spectrum/spectrum.lua`, height of a full-scale bar |
+| `${voffset N}` | `conky-spectrum.conf`, the empty band reserved for it |
+
+Raise both by the same amount. The window is anchored at the bottom of the
+screen, so it grows upward — check that it does not collide with the HUD above.
+
+Bar width follows from the window: `(width - 31 * BAR_GAP) / 32`. To widen the
+whole analyser, change `minimum_width` and `maximum_width` in
+`conky-spectrum.conf` — the bars and the rules follow automatically.
+
+### Refresh rate
+
+Each instance has its own `update_interval`: 1 s for the telemetry, `0.0167`
+(60 fps) for the spectrum. CAVA's `framerate` must match the spectrum instance,
+otherwise Conky draws the same frame twice.
+
+`ATTACK` and `RELEASE` in `spectrum.lua` are per-frame factors, so they must be
+retuned if that rate changes. Equivalent rise and decay times:
+
+| fps | ATTACK | RELEASE |
+|-----|--------|---------|
+| 60  | 0.23   | 0.064   |
+| 20  | 0.55   | 0.18    |
+| 10  | 0.80   | 0.33    |
 
 ## Jersey 15
 
@@ -147,6 +245,7 @@ It waits 5 seconds after login so the desktop and monitor layout can initialize 
 ```text
 .
 ├── conky.conf
+├── conky-spectrum.conf
 ├── Demos
 │   └── Screenshot.png -- The preview
 │   └── Setup -- My setup, direct to me is the Dell 2K monitor and the FullHD secondary monitor is aligned on the bottom line of the primary
@@ -163,8 +262,15 @@ It waits 5 seconds after login so the desktop and monitor layout can initialize 
 │   ├── gpu_name.sh
 │   ├── gpu_util.sh
 │   ├── ssd_name.sh
-│   └── ssd_temp.sh
+│   ├── ssd_temp.sh
+│   └── start-conky.sh
+├── spectrum/
+│   ├── cava.conf
+│   ├── spectrum_bridge.py
+│   ├── spectrum.lua
+│   └── start-spectrum.sh
 └── system/
+    ├── conky-spectrum.service
     └── install-rapl-permissions.sh
 ```
 
@@ -172,7 +278,17 @@ It waits 5 seconds after login so the desktop and monitor layout can initialize 
 
 The CPU clock shown is the highest current logical-CPU frequency. This is more intuitive on hybrid Intel CPUs than displaying one arbitrary core.
 
-The CPU clock graph is normalized to the maximum frequency reported by `cpuinfo_max_freq`, so Conky always receives a 0–100 value.
+The graph under it plots total CPU load from `scripts/cpu_load_pct.sh`, which diffs `/proc/stat` between calls and returns 0–100 — the same busy ratio as `${cpu}`, everything except idle and iowait. At `update_interval = 1` each pixel is one second, so the 480 px graph holds 8 minutes.
+
+Conky's built-in `${cpugraph}` would be the obvious choice here, but on this machine (conky 1.19, Ubuntu 24.04) it draws an empty frame: the border renders, the data never arrives. `${execigraph}` with the script above works, so that is what the config uses.
+
+`scripts/cpu_clock_average_pct.sh` is no longer used by `conky.conf`. It is kept for anyone who prefers an average-clock graph: swap the `${cpugraph}` line for
+
+```text
+${execigraph 1 ~/.config/conky/scripts/cpu_clock_average_pct.sh 52,480 FFFFFF FFFFFF 100}
+```
+
+Be aware that on recent Intel parts `scaling_cur_freq` reports the requested P-state rather than the measured frequency, which pins that graph near 100 % even at idle.
 
 ## License
 

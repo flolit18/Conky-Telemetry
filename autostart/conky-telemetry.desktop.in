@@ -1,7 +1,7 @@
 [Desktop Entry]
 Type=Application
 Name=Conky Telemetry
-Comment=System telemetry HUD
-Exec=sh -c "sleep 5; killall conky 2>/dev/null; conky -c __HOME__/.config/conky/conky.conf"
+Comment=System telemetry HUD and audio spectrum
+Exec=sh -c "sleep 5; __HOME__/.config/conky/scripts/start-conky.sh"
 Terminal=false
 X-GNOME-Autostart-enabled=true

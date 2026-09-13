@@ -7,7 +7,9 @@ I am on Ubuntu 24.04 LTS with an NVIDIA graphics card.
 ## Set up and Demo
 
 You can find it in 
-```Demos/
+```
+Demos/
+```
 
 Designed around:
 - Jersey 15 pixel font

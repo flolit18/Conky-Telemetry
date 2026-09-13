@@ -22,10 +22,12 @@ cp "$ROOT"/spectrum/spectrum.lua \
    "$ROOT"/spectrum/spectrum_bridge.py \
    "$ROOT"/spectrum/cava.conf \
    "$ROOT"/spectrum/start-spectrum.sh \
+   "$ROOT"/spectrum/now_playing.sh \
    "$CONKY_DIR/spectrum/"
 chmod 644 "$CONKY_DIR"/spectrum/spectrum.lua "$CONKY_DIR"/spectrum/cava.conf
 chmod 755 "$CONKY_DIR"/spectrum/start-spectrum.sh \
-          "$CONKY_DIR"/spectrum/spectrum_bridge.py
+          "$CONKY_DIR"/spectrum/spectrum_bridge.py \
+          "$CONKY_DIR"/spectrum/now_playing.sh
 
 # Conky does expand ~ in lua_load, but the installed copy is made
 # explicit so it never depends on that.

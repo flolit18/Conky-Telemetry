@@ -18,7 +18,7 @@ Designed around:
 - RAM usage
 - NVMe usage / temperature / I/O
 - Weather, location, time, and uptime
-- Audio spectrum analyser (CAVA + Lua/Cairo)
+- Audio spectrum analyser (CAVA + Lua/Cairo) with the current track
 - Xinerama multi-monitor placement
 
 ## Screenshot target
@@ -30,7 +30,7 @@ The default layout is intended for a 1920×1080 secondary display and uses rough
 Ubuntu/Debian:
 
 ```bash
-sudo apt install conky-all lm-sensors curl fontconfig cava
+sudo apt install conky-all lm-sensors curl fontconfig cava playerctl
 ```
 
 `conky-all` is required, not `conky-std`: the spectrum analyser is drawn from Lua
@@ -114,6 +114,30 @@ conky -c ~/.config/conky/conky-spectrum.conf
 
 CAVA reads the default PulseAudio/PipeWire monitor source, so the bars only move
 while something is actually playing.
+
+### Now playing
+
+The line between the `AUDIO SPECTRUM` rule and the bars comes from
+`spectrum/now_playing.sh`, which asks `playerctl` for the current MPRIS track —
+the same source the GNOME media tile reads, so browsers, Spotify, VLC and mpv
+all work. Player preference order is at the top of the script.
+
+Three constraints shape it, all from the bottom-anchored layout:
+
+- It must print exactly one line. A wrapped title would push the whole block up,
+  so the script truncates to `MAX_LENGTH` characters.
+- It must never print nothing. An empty line collapses and shifts the block, so
+  an em dash is printed when no player is running.
+- It forces `LC_ALL=C.UTF-8`. Conky inherits the session locale, and under a
+  non-UTF-8 one bash slices bytes instead of characters, cutting multi-byte
+  titles in half.
+
+`${scroll}` is deliberately not used for long titles: it advances one step per
+Conky update, which at 60 fps is unreadable.
+
+The line is set in DejaVu Sans rather than Jersey 15, which is a pixel font with
+no accented or non-Latin glyphs. Change it in `conky-spectrum.conf` if you only
+ever play ASCII-titled tracks.
 
 ### Vertical alignment
 

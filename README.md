@@ -4,6 +4,10 @@ A compact Conky system-monitor HUD for a secondary Full-HD display. This is vibe
 make my second screen more useful when I leave it blank. 
 
 I am on Ubuntu 24.04 LTS with an NVIDIA graphics card.
+## Set up and Demo
+
+You can find it in 
+```Demos/
 
 Designed around:
 - Jersey 15 pixel font
@@ -141,6 +145,9 @@ It waits 5 seconds after login so the desktop and monitor layout can initialize 
 ```text
 .
 ├── conky.conf
+├── Demos
+│   └── Screenshot.png -- The preview
+│   └── Setup -- My setup, direct to me is the Dell 2K monitor and the FullHD secondary monitor is aligned on the bottom line of the primary
 ├── install.sh
 ├── uninstall.sh
 ├── autostart/

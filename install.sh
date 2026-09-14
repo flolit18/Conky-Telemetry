@@ -15,7 +15,9 @@ echo "[2/7] Installing Conky configuration..."
 cp "$ROOT/conky.conf" "$CONKY_DIR/conky.conf"
 cp "$ROOT/conky-spectrum.conf" "$CONKY_DIR/conky-spectrum.conf"
 cp "$ROOT"/scripts/*.sh "$CONKY_DIR/scripts/"
+cp "$ROOT"/scripts/*.lua "$CONKY_DIR/scripts/"
 chmod +x "$CONKY_DIR"/scripts/*.sh
+chmod 644 "$CONKY_DIR"/scripts/*.lua
 
 echo "[3/7] Installing spectrum analyser..."
 cp "$ROOT"/spectrum/spectrum.lua \
@@ -29,10 +31,13 @@ chmod 755 "$CONKY_DIR"/spectrum/start-spectrum.sh \
           "$CONKY_DIR"/spectrum/spectrum_bridge.py \
           "$CONKY_DIR"/spectrum/now_playing.sh
 
-# Conky does expand ~ in lua_load, but the installed copy is made
-# explicit so it never depends on that.
+# Conky does expand ~ in lua_load, but the installed copies are made
+# explicit so they never depend on that. Each instance loads its own
+# script: the HUD the CPU load source, the spectrum the Cairo drawing.
 sed -i "s|^    lua_load = .*|    lua_load = '$CONKY_DIR/spectrum/spectrum.lua',|" \
     "$CONKY_DIR/conky-spectrum.conf"
+sed -i "s|^    lua_load = .*|    lua_load = '$CONKY_DIR/scripts/cpu_graph.lua',|" \
+    "$CONKY_DIR/conky.conf"
 
 echo "[4/7] Installing spectrum systemd user service..."
 cp "$ROOT/system/conky-spectrum.service" "$SYSTEMD_DIR/conky-spectrum.service"

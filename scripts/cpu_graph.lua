@@ -1,85 +1,85 @@
 ------------------------------------------------------------
--- CPU AVERAGE CLOCK GRAPH
+-- CPU LOAD GRAPH
 ------------------------------------------------------------
 
-local CPU_MAX_FREQ = nil
+local previous_total = 0
+local previous_busy = 0
+local primed = false
 
 
-local function read_number(path)
+------------------------------------------------------------
+-- Aggregate "cpu" line of /proc/stat:
+--
+--   cpu  user nice system idle iowait irq softirq steal ...
+--
+-- All counters are cumulative ticks since boot.
+------------------------------------------------------------
 
-    local file = io.open(path, "r")
+local function read_cpu()
+
+    local file = io.open("/proc/stat", "r")
 
     if not file then
         return nil
     end
 
-    local value = tonumber(file:read("*l"))
+    local line = file:read("*l")
 
     file:close()
 
-    return value
+    if not line then
+        return nil
+    end
+
+    local values = {}
+
+    for value in string.gmatch(line, "%d+") do
+        table.insert(values, tonumber(value))
+    end
+
+    if #values < 8 then
+        return nil
+    end
+
+    local total = 0
+
+    for i = 1, 8 do
+        total = total + values[i]
+    end
+
+    -- values[4] = idle, values[5] = iowait
+    local busy = total - values[4] - values[5]
+
+    return total, busy
 end
 
 
-local function get_cpu_max_freq()
+function conky_cpu_load_pct()
 
-    local max_freq = 0
+    local total, busy = read_cpu()
 
-    for cpu = 0, 255 do
-
-        local path =
-            "/sys/devices/system/cpu/cpu" ..
-            cpu ..
-            "/cpufreq/cpuinfo_max_freq"
-
-        local value = read_number(path)
-
-        if value and value > max_freq then
-            max_freq = value
-        end
-    end
-
-    -- fallback Core Ultra 7 265K
-    if max_freq <= 0 then
-        max_freq = 5500000
-    end
-
-    return max_freq
-end
-
-
-function conky_cpu_clock_avg_pct()
-
-    if CPU_MAX_FREQ == nil then
-        CPU_MAX_FREQ = get_cpu_max_freq()
-    end
-
-    local sum = 0
-    local count = 0
-
-    for cpu = 0, 255 do
-
-        local path =
-            "/sys/devices/system/cpu/cpu" ..
-            cpu ..
-            "/cpufreq/scaling_cur_freq"
-
-        local value = read_number(path)
-
-        if value then
-            sum = sum + value
-            count = count + 1
-        end
-    end
-
-    if count == 0 then
+    if not total then
         return 0
     end
 
-    local average = sum / count
+    local delta_total = total - previous_total
+    local delta_busy = busy - previous_busy
 
-    local pct =
-        average / CPU_MAX_FREQ * 100
+    previous_total = total
+    previous_busy = busy
+
+    -- First call after Conky starts: comparing against zero would
+    -- report the average since boot instead of the load right now.
+    if not primed then
+        primed = true
+        return 0
+    end
+
+    if delta_total <= 0 then
+        return 0
+    end
+
+    local pct = delta_busy * 100.0 / delta_total
 
     if pct < 0 then
         pct = 0
